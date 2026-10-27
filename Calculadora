@@ -1,0 +1,208 @@
+import React, { useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import {
+  PaperProvider,
+  Button,
+  Surface,
+  Text,
+  Appbar,
+} from 'react-native-paper';
+
+const OPERATORS = ['+', '-', '*', '/'];
+
+const BUTTONS = [
+  ['C', '⌫', '/', '*'],
+  ['7', '8', '9', '-'],
+  ['4', '5', '6', '+'],
+  ['1', '2', '3', '='],
+  ['0', '.'],
+];
+
+function calculate(a, b, op) {
+  switch (op) {
+    case '+':
+      return a + b;
+    case '-':
+      return a - b;
+    case '*':
+      return a * b;
+    case '/':
+      return b === 0 ? null : a / b;
+    default:
+      return b;
+  }
+}
+
+function format(n) {
+  // evita erros de ponto flutuante (ex.: 0.1 + 0.2)
+  return String(parseFloat(n.toPrecision(12)));
+}
+
+export default function App() {
+  const [display, setDisplay] = useState('0');
+  const [previous, setPrevious] = useState(null); // primeiro operando
+  const [operator, setOperator] = useState(null);
+  const [overwrite, setOverwrite] = useState(true); // próximo dígito substitui o display
+  const [expression, setExpression] = useState('');
+
+  const clearAll = () => {
+    setDisplay('0');
+    setPrevious(null);
+    setOperator(null);
+    setOverwrite(true);
+    setExpression('');
+  };
+
+  const backspace = () => {
+    if (overwrite) return;
+    setDisplay((d) => (d.length > 1 ? d.slice(0, -1) : '0'));
+  };
+
+  const inputDigit = (digit) => {
+    if (overwrite) {
+      setDisplay(digit);
+      setOverwrite(false);
+    } else {
+      setDisplay((d) => (d === '0' ? digit : d + digit));
+    }
+  };
+
+  const inputDot = () => {
+    if (overwrite) {
+      setDisplay('0.');
+      setOverwrite(false);
+    } else if (!display.includes('.')) {
+      setDisplay((d) => d + '.');
+    }
+  };
+
+  const chooseOperator = (op) => {
+    const current = parseFloat(display);
+
+    // encadeia operações: 2 + 3 + ... calcula 2 + 3 primeiro
+    if (previous !== null && operator && !overwrite) {
+      const result = calculate(previous, current, operator);
+      if (result === null) {
+        clearAll();
+        setDisplay('Erro');
+        return;
+      }
+      setPrevious(result);
+      setDisplay(format(result));
+      setExpression(`${format(result)} ${op}`);
+    } else {
+      setPrevious(current);
+      setExpression(`${display} ${op}`);
+    }
+    setOperator(op);
+    setOverwrite(true);
+  };
+
+  const equals = () => {
+    if (previous === null || !operator) return;
+    const current = parseFloat(display);
+    const result = calculate(previous, current, operator);
+
+    setExpression(`${format(previous)} ${operator} ${display} =`);
+    if (result === null) {
+      setDisplay('Erro');
+      setPrevious(null);
+      setOperator(null);
+      setOverwrite(true);
+      return;
+    }
+    setDisplay(format(result));
+    setPrevious(null);
+    setOperator(null);
+    setOverwrite(true);
+  };
+
+  const handlePress = (label) => {
+    if (display === 'Erro' && label !== 'C') {
+      clearAll();
+    }
+    if (label === 'C') return clearAll();
+    if (label === '⌫') return backspace();
+    if (label === '=') return equals();
+    if (label === '.') return inputDot();
+    if (OPERATORS.includes(label)) return chooseOperator(label);
+    return inputDigit(label);
+  };
+
+  const buttonMode = (label) => {
+    if (label === '=') return 'contained';
+    if (OPERATORS.includes(label) || label === 'C' || label === '⌫')
+      return 'contained-tonal';
+    return 'outlined';
+  };
+
+  return (
+    <PaperProvider>
+      <View style={styles.container}>
+        <StatusBar style="auto" />
+        <Appbar.Header>
+          <Appbar.Content title="Calculadora" />
+        </Appbar.Header>
+
+        <Surface style={styles.display} elevation={2}>
+          <Text variant="titleMedium" style={styles.expression}>
+            {expression}
+          </Text>
+          <Text
+            variant="displayMedium"
+            style={styles.result}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+          >
+            {display}
+          </Text>
+        </Surface>
+
+        <View style={styles.keypad}>
+          {BUTTONS.map((row, i) => (
+            <View key={i} style={styles.row}>
+              {row.map((label) => (
+                <Button
+                  key={label}
+                  mode={buttonMode(label)}
+                  onPress={() => handlePress(label)}
+                  style={[
+                    styles.button,
+                    label === '0' && styles.zero,
+                    label === '=' && styles.equals,
+                  ]}
+                  contentStyle={styles.buttonContent}
+                  labelStyle={styles.buttonLabel}
+                >
+                  {label}
+                </Button>
+              ))}
+            </View>
+          ))}
+        </View>
+      </View>
+    </PaperProvider>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#fff' },
+  display: {
+    margin: 16,
+    padding: 16,
+    borderRadius: 16,
+    minHeight: 130,
+    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
+  },
+  expression: { opacity: 0.6 },
+  result: { fontWeight: 'bold' },
+  keypad: { flex: 1, paddingHorizontal: 12, paddingBottom: 24 },
+  row: { flex: 1, flexDirection: 'row' },
+  button: { flex: 1, margin: 4, justifyContent: 'center' },
+  zero: { flex: 2 },
+  equals: { flex: 1 },
+  buttonContent: { height: '100%' },
+  buttonLabel: { fontSize: 24 },
+});
